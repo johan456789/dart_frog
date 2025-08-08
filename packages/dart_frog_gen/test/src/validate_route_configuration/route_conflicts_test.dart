@@ -197,7 +197,7 @@ void main() {
     });
 
     test(
-      'reports error when dynamic directories conflict with non dynamic files',
+      'reports no conflict when dynamic directories conflict with non dynamic files',
       () {
         when(() => configuration.endpoints).thenReturn({
           '/cars/<id>': const [
@@ -239,33 +239,16 @@ void main() {
           },
         );
 
-        expect(violationStartCalled, isTrue);
-        expect(violationEndCalled, isTrue);
-        expect(
-          conflicts,
-          equals(
-            [
-              '${path.normalize('/cars/<id>')} and ${path.normalize('//cars/mine')} -> /cars/<id>',
-            ],
-          ),
-        );
+        expect(violationStartCalled, isFalse);
+        expect(violationEndCalled, isFalse);
+        expect(conflicts, isEmpty);
       },
     );
 
     test(
-      'reports error when dynamic directories conflict with non dynamic files, '
-      'with multiple folders',
+      'reports conflict when there are conflicting dynamic routes',
       () {
         when(() => configuration.endpoints).thenReturn({
-          '/turtles/random': const [
-            RouteFile(
-              name: 'turtles_random',
-              path: '../routes/turtles/random.dart',
-              route: '/',
-              params: [],
-              wildcard: false,
-            ),
-          ],
           '/turtles/<id>': const [
             RouteFile(
               name: r'turtles_$id_index',
@@ -275,29 +258,11 @@ void main() {
               wildcard: false,
             ),
           ],
-          '/turtles/<id>/bla': const [
+          '/turtles/<name>': const [
             RouteFile(
-              name: r'turtles_$id_bla',
-              path: '../routes/turtles/[id]/bla.dart',
-              route: '/turtles/<id>/bla.dart',
-              params: [],
-              wildcard: false,
-            ),
-          ],
-          '/turtles/<id>/<name>': const [
-            RouteFile(
-              name: r'turtles_$id_$name_index',
-              path: '../routes/turtles/[id]/[name]/index.dart',
-              route: '/turtles/<id>/<name>/index.dart',
-              params: [],
-              wildcard: false,
-            ),
-          ],
-          '/turtles/<id>/<name>/ble.dart': const [
-            RouteFile(
-              name: r'turtles_$id_$name_ble.dart',
-              path: '../routes/turtles/[id]/[name]/ble.dart',
-              route: '/turtles/<id>/<name>/ble.dart',
+              name: r'turtles_$name_index',
+              path: '../routes/turtles/[name]/index.dart',
+              route: '/turtles/<name>',
               params: [],
               wildcard: false,
             ),
@@ -330,10 +295,69 @@ void main() {
         expect(
           conflicts,
           [
-            '${path.normalize('/turtles/<id>')} and ${path.normalize('/turtles/random')} -> /turtles/<id>',
-            '${path.normalize('/turtles/<id>/<name>')} and ${path.normalize('/turtles/<id>/bla')} -> /turtles/<id>/<name>',
+            '${path.normalize('routes/../routes/turtles/[id]/index.dart')} and ${path.normalize('routes/../routes/turtles/[name]/index.dart')} -> /turtles/<id>',
           ],
         );
+      },
+    );
+
+    test(
+      'reports no conflict when there is a dynamic and a static route',
+      () {
+        when(() => configuration.endpoints).thenReturn({
+          '/': const [
+            RouteFile(
+              name: 'index',
+              path: '../routes/index.dart',
+              route: '/',
+              params: [],
+              wildcard: false,
+            ),
+          ],
+          '/<foo>': const [
+            RouteFile(
+              name: 'foo',
+              path: '../routes/[foo].dart',
+              route: '/<foo>',
+              params: ['foo'],
+              wildcard: false,
+            ),
+          ],
+          '/bar': const [
+            RouteFile(
+              name: 'bar',
+              path: '../routes/bar.dart',
+              route: '/bar',
+              params: [],
+              wildcard: false,
+            ),
+          ],
+        });
+
+        reportRouteConflicts(
+          configuration,
+          onViolationStart: () {
+            violationStartCalled = true;
+          },
+          onRouteConflict: (
+            originalFilePath,
+            conflictingFilePath,
+            conflictingEndpoint,
+          ) {
+            conflicts.add(
+              '$originalFilePath and '
+              '$conflictingFilePath -> '
+              '$conflictingEndpoint',
+            );
+          },
+          onViolationEnd: () {
+            violationEndCalled = true;
+          },
+        );
+
+        expect(violationStartCalled, isFalse);
+        expect(violationEndCalled, isFalse);
+        expect(conflicts, isEmpty);
       },
     );
   });
