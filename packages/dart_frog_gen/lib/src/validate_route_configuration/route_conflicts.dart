@@ -44,52 +44,64 @@ void reportRouteConflicts(
       .where((entry) => entry.value.length > 1)
       .map((e) => _RouteConflict(e.value.first.path, e.value.last.path, e.key));
 
-  final indirectConflicts = configuration.endpoints.entries
-      .map((entry) {
-        final matches = configuration.endpoints.keys.where((other) {
-          final keyParts = entry.key.split('/');
-          if (other == entry.key) {
-            return false;
-          }
+  final indirectConflicts = <_RouteConflict>{};
+  final endpointList = configuration.endpoints.entries.toList();
 
-          final otherParts = other.split('/');
+  for (var i = 0; i < endpointList.length; i++) {
+    for (var j = i + 1; j < endpointList.length; j++) {
+      final entryA = endpointList[i];
+      final entryB = endpointList[j];
 
-          var match = false;
+      final keyA = entryA.key;
+      final keyB = entryB.key;
 
-          if (keyParts.length == otherParts.length) {
-            for (var i = 0; i < keyParts.length; i++) {
-              if ((keyParts[i] == otherParts[i]) ||
-                  (keyParts[i].startsWith('<') ||
-                      otherParts[i].startsWith('<'))) {
-                match = true;
-              } else {
-                match = false;
-                break;
-              }
-            }
-          }
+      final partsA = keyA.split('/');
+      final partsB = keyB.split('/');
 
-          return match;
-        });
+      if (partsA.length != partsB.length) {
+        continue;
+      }
 
-        if (matches.isNotEmpty) {
-          final originalFilePath =
-              matches.first.endsWith('>') ? matches.first : entry.key;
+      var isConflict = true;
+      for (var k = 0; k < partsA.length; k++) {
+        final segmentA = partsA[k];
+        final segmentB = partsB[k];
 
-          final conflictingFilePath =
-              entry.key == originalFilePath ? matches.first : entry.key;
-
-          return _RouteConflict(
-            originalFilePath,
-            conflictingFilePath,
-            originalFilePath,
-          );
+        if (segmentA == segmentB) {
+          continue;
         }
 
-        return null;
-      })
-      .whereType<_RouteConflict>()
-      .toSet();
+        final isSegmentADynamic = segmentA.startsWith('<');
+        final isSegmentBDynamic = segmentB.startsWith('<');
+
+        if (isSegmentADynamic && isSegmentBDynamic) {
+          continue;
+        }
+
+        isConflict = false;
+        break;
+      }
+
+      if (isConflict) {
+        final fileA = entryA.value.first;
+        final fileB = entryB.value.first;
+
+        final pathA = fileA.path;
+        final pathB = fileB.path;
+
+        final orderedPaths = [pathA, pathB]..sort();
+        final orderedKeys = [keyA, keyB]..sort();
+
+        indirectConflicts.add(
+          _RouteConflict(
+            orderedPaths[0],
+            orderedPaths[1],
+            orderedKeys[0],
+          ),
+        );
+      }
+    }
+  }
 
   final conflictingEndpoints = [...directConflicts, ...indirectConflicts];
 
